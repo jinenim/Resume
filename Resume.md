@@ -22,7 +22,7 @@
 
 | 영역 | 역량 |
 |------|------|
-| **전투 시스템** | FSM 기반 전투 및 캐릭터 상태 관리 아키텍처 설계 |
+| **전투 시스템** | FSM / Behavior Tree 기반 전투 및 캐릭터 상태 관리 아키텍처 설계 |
 | **성능 최적화** | GC Zero Allocation 최적화 (LinqGen, ZString, Addressables) |
 | **네트워크** | 라이브 서비스 서버 동기화, 재시도 로직, 네트워크 안정성 설계 |
 
@@ -34,6 +34,8 @@
 **2025.05 – 2026.01**
 
 #### K 데몬헌터 키우기 – Mobile Idle Action RPG (Android / iOS)
+
+🔗 [Google Play](https://play.google.com/store/apps/details?id=com.codedragon.woochi&hl=ko)
 
 - 다수의 액티브/패시브 스킬이 공존하는 구조에서 스킬 발동 조건·쿨타임·효과 적용을 공통화하여 **확장 가능한 스킬 시스템** 설계
 - **150개 이상 스탯**이 실시간 전투 계산에 사용되는 구조에서 캐싱 + 이벤트 기반 갱신 구조를 도입하여 **프레임당 연산 비용 대폭 감소**
@@ -48,6 +50,8 @@
 **2023.09 – 2025.05**
 
 #### 가디언즈 디펜스 – Defense
+
+🔗 [YouTube](https://www.youtube.com/watch?v=DU6c8LZxf3o)
 
 - 실시간 전투/상태 동기화를 위해 **gRPC + MagicOnion** 기반 저지연 통신 구조 도입
 - **26종 이상의 캐릭터 AI**를 공통 베이스 위에 개별 패턴 확장 구조로 설계하여 관리 비용 최소화
@@ -73,6 +77,8 @@
 
 #### 합성 소녀 – Idle RPG
 
+🔗 [Google Play](https://play.google.com/store/apps/details?id=com.gamepub.hab.g)
+
 - **Excel → C# 코드 자동 생성 파이프라인** 구축으로 대규모 테이블(90+종) 관리 및 기획–개발 협업 효율 개선
 - **Addressables 기반 동적 에셋 로딩** 시스템 설계로 메모리 사용량 최적화
 - **WebSocket + Protobuf + MsgPack** 기반 저지연 실시간 통신 아키텍처 설계
@@ -81,12 +87,16 @@
 
 #### 대장장이 용병단 – Idle RPG
 
+🔗 [Google Play](https://play.google.com/store/apps/details?id=com.gamepub.mc.g)
+
 - 전투·버프·머지·아이템·상점 등 클라이언트 핵심 시스템 전반 설계 및 구현
 - Google Play / App Store / OneStore **멀티 플랫폼 인앱 결제** 구조 통합
 - Firebase, Adjust, OneSignal 연동으로 운영 분석 및 푸시 파이프라인 구축
 - 글로벌 출시 후 **100만 다운로드 이상** 달성
 
 #### 다크 타운 – Action RPG
+
+🔗 [YouTube](https://www.youtube.com/watch?v=JWXYGugWevs) | [Naver Cafe](https://cafe.naver.com/soullike)
 
 - **20종 이상의 보스 AI** 및 패턴 설계
 - 매 입장 시 구성이 변경되는 **동적 던전 생성 시스템** 설계로 반복 플레이 구조 개선
