@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Email** | jinenim@naver.com |
-| **Portfolio** | [GitHub Portfolio](https://github.com/jinenim/Portfolio/blob/main/Portfolio.md) |
+| **Portfolio** | [GitHub Portfolio](https://github.com/jinenim/Resume/blob/main/Portfolio.md) |
 
 ---
 
