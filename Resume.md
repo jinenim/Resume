@@ -33,7 +33,7 @@
 ### Freelance – Senior Client / Web Server Programmer
 **2025.05 – 2026.01**
 
-#### K 데몬헌터 키우기 – Mobile Idle Action RPG (Android / iOS)
+#### K 데몬헌터 키우기 – Mobile Idle Action RPG
 
 🔗 [Google Play](https://play.google.com/store/apps/details?id=com.codedragon.woochi&hl=ko)
 
