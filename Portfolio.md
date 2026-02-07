@@ -1,3 +1,418 @@
+# 기술 포트폴리오
+
+---
+
+# 팡팡수호대 - 기술 포트폴리오
+
+## 프로젝트 요약
+
+| 항목 | 내용 |
+|------|------|
+| **장르** | 모바일 멀티플레이 타워 디펜스 |
+| **역할** | 클라이언트 메인 프로그래머 |
+| **개발 환경** | Unity, C# |
+| **플랫폼** | Android / iOS |
+| **네트워크** | Photon Quantum (결정론적 멀티플레이) |
+
+### 프로젝트 규모
+- C# 스크립트 **793개**
+- UI 파일 **251개**
+- 5종 캐릭터 클래스, 다수의 몬스터/보스
+
+### 핵심 기여
+| 영역 | 성과 |
+|------|------|
+| **멀티플레이** | Photon Quantum 기반 **결정론적 동기화** 구현 |
+| **아키텍처** | **ECS(Entity Component System)** 패턴으로 게임 로직 설계 |
+| **네트워크** | Photon Realtime + MagicOnion 이중 통신 구조 |
+| **성능** | Unsafe 포인터 + 구조체 기반 고성능 게임 루프 |
+
+---
+
+## 목차
+
+1. [Photon Quantum ECS 기반 멀티플레이 시스템](#1-photon-quantum-ecs-기반-멀티플레이-시스템)
+2. [ECS 아키텍처 설계](#2-ecs-아키텍처-설계)
+3. [캐릭터/몬스터 시스템](#3-캐릭터몬스터-시스템)
+4. [네트워크 동기화 및 매치메이킹](#4-네트워크-동기화-및-매치메이킹)
+
+---
+
+## 1. Photon Quantum ECS 기반 멀티플레이 시스템
+
+### 결과
+- **결정론적 시뮬레이션**으로 모든 클라이언트가 동일한 게임 결과 보장
+- 네트워크 지연에 영향 없이 자연스러운 실시간 멀티플레이
+- Checksum 검증으로 동기화 무결성 확보
+
+### 핵심 설계
+- **Photon Quantum**: 결정론적 ECS 프레임워크 채택
+- **Frame 기반 시뮬레이션**: 모든 플레이어가 동일 입력 → 동일 결과
+- **결정론적 난수(RNG)**: Frame 시드 기반으로 모든 클라이언트 동일 난수 생성
+
+### 설계 배경
+실시간 멀티플레이 타워 디펜스에서 모든 플레이어가 **정확히 동일한 게임 상태**를 봐야 했습니다. 일반적인 State Sync 방식은 네트워크 트래픽이 많고 지연에 취약한 반면, Photon Quantum의 결정론적 시뮬레이션은 **입력만 동기화**하여 효율적이고 안정적인 멀티플레이를 구현할 수 있었습니다.
+
+### 구현 상세
+
+#### 1.1. Quantum 시스템 동적 등록
+
+콘텐츠(Stage/Challenge)에 따라 필요한 시스템만 동적으로 등록하여 성능 최적화:
+
+```csharp
+public static void AddSystems_Stage(ICollection<SystemBase> systems)
+{
+    // 기본 시스템
+    systems.Add(new Game_Stage_System_Init());
+    systems.Add(new Game_Stage_System_Play());
+    systems.Add(new Game_Stage_System_Play_Late());
+
+    // 성(Castle) 시스템
+    systems.Add(new Castle_System_Signal());
+    systems.Add(new Effect_System_Castle_Mine());
+
+    // 플레이어가 선택한 캐릭터에 따라 동적 추가
+    foreach (var character in playerCharacterInfos)
+    {
+        switch (character._tableInfo._key)
+        {
+            case 1020100: // Knight
+                systems.Add(new Character_System_Knight());
+                systems.Add(new Effect_System_Knight_Projectile());
+                break;
+            case 1020200: // Ranger
+                systems.Add(new Character_System_Ranger());
+                systems.Add(new Effect_System_Ranger_Arrow());
+                break;
+            case 1020300: // Mage
+                systems.Add(new Character_System_Mage());
+                systems.Add(new Effect_System_Mage_Skill_Bomb());
+                break;
+            // ...
+        }
+    }
+}
+```
+
+#### 1.2. 결정론적 난수 생성
+
+모든 클라이언트에서 동일한 결과를 보장하는 Frame 기반 RNG:
+
+```csharp
+public static EntityRef SpawnMonster(Frame frame, int tableKey, FP posY)
+{
+    EntityRef entity = frame.Create(entities._monsters[tableKey]);
+    Transform2D* transform = frame.Unsafe.GetPointer<Transform2D>(entity);
+
+    // 결정론적 난수: 모든 클라이언트에서 동일한 값
+    FP randomOffset = frame.RNG->Next(FP._0_10, FP._0_50);
+    transform->Position.Y = posY + randomOffset;
+
+    return entity;
+}
+```
+
+---
+
+## 2. ECS 아키텍처 설계
+
+### 결과
+- **컴포넌트 기반 설계**로 유연한 엔티티 구성
+- 직업별 고유 로직을 독립적인 시스템으로 분리
+- 메모리 효율적인 구조체 + Unsafe 포인터 활용
+
+### 핵심 설계
+- **Entity**: 캐릭터, 몬스터, 이펙트 등 게임 오브젝트
+- **Component**: 상태 데이터 (Transform, Status, Animation 등)
+- **System**: 로직 처리 (이동, 공격, 스킬 발동 등)
+
+### 구현 상세
+
+#### 2.1. 컴포넌트 필터 패턴
+
+제너릭 필터로 타입 안전성과 성능을 동시에 확보:
+
+```csharp
+public unsafe interface ICharacterFilter
+{
+    EntityRef GetEntity();
+    Transform2D* GetTransform();
+    Actor_Component_Anim* GetAnim();
+    Character_Component_Base* GetBase();
+    Character_Component_Status_Common* GetStatusCommon();
+}
+
+// Knight 전용 필터
+public struct Filter : ICharacterFilter
+{
+    public EntityRef Entity;
+    public Transform2D* Transform;
+    public Actor_Component_Anim* Anim;
+    public Character_Component_Base* Base;
+    public Character_Component_Status_Common* StatusCommon;
+    public Character_Component_Status_Knight* StatusKnight; // 직업별 고유 컴포넌트
+
+    public EntityRef GetEntity() => Entity;
+    public Transform2D* GetTransform() => Transform;
+    // ...
+}
+```
+
+#### 2.2. 시스템 기반 클래스
+
+공통 로직은 베이스 클래스에서, 직업별 특화 로직은 파생 클래스에서 처리:
+
+```csharp
+public abstract class Character_System_Base<T> : SystemMainThreadFilter<T>
+    where T : unmanaged, ICharacterFilter
+{
+    public override void Update(Frame frame, ref T filter)
+    {
+        // 공통 처리: 상태 체크, 쿨타임 감소 등
+        ProcessCommon(frame, ref filter);
+
+        // 스킬 처리 (파생 클래스에서 구현)
+        Process_Skill(frame, ref filter);
+
+        // 공격 처리
+        Process_Attack(frame, ref filter);
+    }
+
+    protected abstract void Process_Skill(Frame frame, ref T filter);
+
+    // 레벨업 선택지 적용 (직업별 다른 효과)
+    public abstract void ApplyOption(Frame frame, ref T filter,
+        int tableKey, int level);
+}
+```
+
+---
+
+## 3. 캐릭터/몬스터 시스템
+
+### 결과
+- 5종 캐릭터 클래스 (Knight, Ranger, Mage, Pikeman, WindElemental)
+- 각 직업별 고유 스킬과 레벨업 선택지 시스템
+- 상태 머신 기반 몬스터 AI
+
+### 핵심 설계
+- **직업별 독립 시스템**: 각 캐릭터 클래스마다 전용 System 클래스
+- **레벨업 선택지**: 런타임에 능력치/스킬 강화 선택
+- **몬스터 상태 머신**: Enter → Spawn → Idle/Attack/Move → Die
+
+### 구현 상세
+
+#### 3.1. 캐릭터 시스템 예시 (Knight)
+
+```csharp
+public unsafe class Character_System_Knight :
+    Character_System_Base<Character_System_Knight.Filter>
+{
+    public override void ApplyOption(Frame frame, ref Filter filter,
+        int tableKey, int level)
+    {
+        var statusKnight = filter.StatusKnight;
+        var statusCommon = filter.StatusCommon;
+
+        switch (tableKey)
+        {
+            case 1070100: // "연사 증가"
+                statusKnight->_burstShotCount += level;
+                statusKnight->_burstShotDelay = CalculateNewDelay(level);
+                break;
+
+            case 1070102: // "스킬 위력 증가"
+                statusCommon->_optionSkillDmgRate += GetDamageBonus(level);
+                break;
+
+            case 1070105: // "크리티컬 확률"
+                statusCommon->_criticalRate += GetCritBonus(level);
+                break;
+        }
+    }
+
+    protected override void Process_Skill(Frame frame, ref Filter filter)
+    {
+        // Knight 고유 스킬: 슬래시, 연사, 폭발
+        if (CanUseSkill(filter))
+        {
+            ExecuteKnightSkill(frame, ref filter);
+        }
+    }
+}
+```
+
+#### 3.2. 몬스터 상태 머신
+
+```csharp
+public unsafe class Monster_System_Base<T> : SystemMainThreadFilter<T>
+    where T : unmanaged, IMonsterFilter
+{
+    public override void Update(Frame frame, ref T filter)
+    {
+        var status = filter.GetStatus();
+
+        switch (status->_state)
+        {
+            case EMonsterState.Enter:
+                Process_Enter(frame, ref filter);
+                break;
+
+            case EMonsterState.Spawn:
+                Process_Spawn(frame, ref filter);
+                break;
+
+            case EMonsterState.Idle:
+            case EMonsterState.Move:
+                Process_Move(frame, ref filter);
+                Process_Attack(frame, ref filter);
+                break;
+
+            case EMonsterState.Die:
+                Process_Die(frame, ref filter);
+                break;
+        }
+
+        // 공통 처리: Slow 효과, DoT, 색상 Tint
+        Process_StatusEffects(frame, ref filter);
+    }
+}
+```
+
+---
+
+## 4. 네트워크 동기화 및 매치메이킹
+
+### 결과
+- Photon Realtime 기반 방 생성/입장/매치메이킹
+- 플레이어 정보 암호화 전송
+- Observer 패턴으로 이벤트 기반 통신
+
+### 핵심 설계
+- **Photon Realtime**: 로비, 방 관리, 플레이어 동기화
+- **RaiseEvent**: 게임 시작 전 플레이어 데이터 교환
+- **BSON + AES**: 데이터 직렬화 및 암호화
+
+### 구현 상세
+
+#### 4.1. 매치메이킹 시스템
+
+```csharp
+public class Manager_Photon : MonoBehaviour,
+    IConnectionCallbacks,
+    IMatchmakingCallbacks,
+    ILobbyCallbacks,
+    IInRoomCallbacks
+{
+    // 방 생성 옵션
+    public void CreateRoom_Public(int difficulty)
+    {
+        var options = new RoomOptions
+        {
+            MaxPlayers = 2,
+            IsVisible = true,
+            CustomRoomProperties = new Hashtable
+            {
+                { "difficulty", difficulty },
+                { "isPrivate", false }
+            }
+        };
+
+        PhotonNetwork.CreateRoom(GenerateRoomName(), options);
+    }
+
+    public void CreateRoom_Private(string roomName, int difficulty)
+    {
+        var options = new RoomOptions
+        {
+            MaxPlayers = 2,
+            IsVisible = false, // 비공개
+            CustomRoomProperties = new Hashtable
+            {
+                { "difficulty", difficulty },
+                { "isPrivate", true }
+            }
+        };
+
+        PhotonNetwork.CreateRoom(roomName, options);
+    }
+}
+```
+
+#### 4.2. 플레이어 데이터 동기화
+
+```csharp
+public void SendRaiseEvent(
+    int randomSeed,
+    bool isVip,
+    int castleLevel, int castleHp, int castleDef,
+    CharacterInfo[] characterInfos,
+    ArtifactInfo[] artifactInfos)
+{
+    var data = new Dictionary<string, object>
+    {
+        { "seed", randomSeed },
+        { "isVip", isVip },
+        { "castle", new { level = castleLevel, hp = castleHp, def = castleDef } },
+        { "characters", characterInfos },
+        { "artifacts", artifactInfos }
+    };
+
+    // BSON 직렬화 + AES 암호화
+    byte[] encryptedData = Crypto.Encrypt(BsonSerializer.Serialize(data));
+
+    PhotonNetwork.RaiseEvent(
+        EventCode.PlayerData,
+        encryptedData,
+        new RaiseEventOptions { Receivers = ReceiverGroup.Others },
+        SendOptions.SendReliable
+    );
+}
+```
+
+#### 4.3. Observer 패턴 이벤트 시스템
+
+```csharp
+// 이벤트 정의
+public static class Observer
+{
+    public static class Msgs
+    {
+        public struct Photon_OnJoinedLobby { }
+        public struct Photon_OnCreatedRoom { }
+        public struct Photon_OnJoinedRoom { }
+        public struct Photon_OnPlayerEnteredRoom { public Player Player; }
+        public struct Photon_OnDisconnected { public DisconnectCause Cause; }
+    }
+}
+
+// 이벤트 발행
+public void OnJoinedRoom()
+{
+    Observer.Tracker<Observer.Msgs.Photon_OnJoinedRoom>.Track(
+        new Observer.Msgs.Photon_OnJoinedRoom()
+    );
+}
+
+// 이벤트 구독
+public class LobbyUI : MonoBehaviour, IObserver<Observer.Msgs.Photon_OnJoinedRoom>
+{
+    public void OnEvent(Observer.Msgs.Photon_OnJoinedRoom msg)
+    {
+        // 방 입장 UI 처리
+        ShowRoomUI();
+    }
+}
+```
+
+**트레이드오프:**
+- ECS 구조로 인한 학습 곡선 → 명확한 패턴과 베이스 클래스로 진입 장벽 낮춤
+- Unsafe 포인터 사용의 위험성 → 철저한 null 체크와 프레임워크 규칙 준수
+
+---
+
+---
+
 # K 데몬헌터 키우기 - 기술 포트폴리오
 
 ## 프로젝트 요약
