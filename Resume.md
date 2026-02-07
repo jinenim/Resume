@@ -23,6 +23,7 @@
 | 영역 | 역량 |
 |------|------|
 | **전투 시스템** | FSM / Behavior Tree 기반 전투 및 캐릭터 상태 관리 아키텍처 설계 |
+| **멀티플레이** | Photon Quantum 기반 결정론적 멀티플레이, ECS 아키텍처 설계 |
 | **성능 최적화** | GC Zero Allocation 최적화 (LinqGen, ZString, Addressables) |
 | **네트워크** | 라이브 서비스 서버 동기화, 재시도 로직, 네트워크 안정성 설계 |
 
